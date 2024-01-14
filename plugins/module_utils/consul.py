@@ -5,8 +5,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
+import copy
 import json
 
 from ansible.module_utils.six.moves.urllib import error as urllib_error
@@ -15,24 +17,35 @@ from ansible.module_utils.urls import open_url
 
 
 def get_consul_url(configuration):
-    return '%s://%s:%s/v1' % (configuration.scheme,
-                              configuration.host, configuration.port)
+    return "%s://%s:%s/v1" % (
+        configuration.scheme,
+        configuration.host,
+        configuration.port,
+    )
 
 
 def get_auth_headers(configuration):
     if configuration.token is None:
         return {}
     else:
-        return {'X-Consul-Token': configuration.token}
+        return {"X-Consul-Token": configuration.token}
 
 
 class RequestError(Exception):
-    pass
+    def __init__(self, status, response_data=None):
+        self.status = status
+        self.response_data = response_data
+
+    def __str__(self):
+        if self.response_data is None:
+            # self.status is already the message (backwards compat)
+            return self.status
+        return "HTTP %d: %s" % (self.status, self.response_data)
 
 
 def handle_consul_response_error(response):
     if 400 <= response.status_code < 600:
-        raise RequestError('%d %s' % (response.status_code, response.content))
+        raise RequestError("%d %s" % (response.status_code, response.content))
 
 
 def auth_argument_spec():
@@ -46,6 +59,21 @@ def auth_argument_spec():
     )
 
 
+def camel_case_key(key):
+    parts = []
+    for part in key.split("_"):
+        if part in {"id", "ttl"}:
+            parts.append(part.upper())
+        else:
+            parts.append(part.capitalize())
+    return "".join(parts)
+
+
+STATE_PARAMETER = "state"
+STATE_PRESENT = "present"
+STATE_ABSENT = "absent"
+
+
 class _ConsulModule:
     """Base class for Consul modules.
 
@@ -53,8 +81,108 @@ class _ConsulModule:
     As such backwards incompatible changes can occur even in bugfix releases.
     """
 
+    api_endpoint = None
+    unique_identifier = None
+    result_key = None
+
     def __init__(self, module):
         self.module = module
+        self.param_obj_mapping = {
+            k: camel_case_key(k)
+            for k in self.module.params
+            if k not in STATE_PARAMETER and k not in auth_argument_spec()
+        }
+
+    def execute(self):
+        module = self.module
+
+        obj = self.read_object()
+
+        changed = False
+        diff = {}
+        if module.params[STATE_PARAMETER] == STATE_PRESENT:
+            obj_from_module = self.module_to_obj(obj is not None)
+            if obj is None:
+                new_obj = self.create_object(obj_from_module)
+                diff = {"before": {}, "after": new_obj}
+                changed = True
+            else:
+                if self._needs_update(obj, obj_from_module):
+                    new_obj = self.update_object(obj_from_module)
+                    diff = {"before": obj, "after": new_obj}
+                    changed = True
+                else:
+                    new_obj = obj
+        elif module.params[STATE_PARAMETER] == STATE_ABSENT:
+            if obj is not None:
+                self.delete_object()
+                changed = True
+                diff = {"before": obj, "after": {}}
+            else:
+                diff = {"before": {}, "after": {}}
+            new_obj = None
+        else:
+            raise RuntimeError("Unknown state supplied.")
+
+        result = {"changed": changed}
+        if self.module._diff and changed:
+            result["diff"] = diff
+        if self.result_key:
+            result[self.result_key] = new_obj
+        module.exit_json(**result)
+
+    def module_to_obj(self, is_update):
+        obj = {}
+        for k, v in self.module.params.items():
+            result = self.map_param(k, v, is_update)
+            if result:
+                obj[result[0]] = result[1]
+        return obj
+
+    def map_param(self, k, v, is_update):
+        if k in self.param_obj_mapping and v is not None:
+            return self.param_obj_mapping[k], v
+
+    def _needs_update(self, api_obj, module_obj):
+        api_obj = copy.deepcopy(api_obj)
+        module_obj = copy.deepcopy(module_obj)
+
+        operational_attributes = {"CreateIndex", "CreateTime", "Hash", "ModifyIndex"}
+
+        api_obj = {k: v for k, v in api_obj.items() if k not in operational_attributes}
+
+        return self.needs_update(api_obj, module_obj)
+
+    def needs_update(self, api_obj, module_obj):
+        return api_obj != module_obj
+
+    def read_object(self):
+        url_parts = [self.api_endpoint, self.module.params[self.unique_identifier]]
+        try:
+            return self.get(url_parts)
+        except RequestError as e:
+            if e.status == 404:
+                return
+
+    def create_object(self, obj):
+        if self.module.check_mode:
+            return obj
+        else:
+            return self.put(self.api_endpoint, data=obj)
+
+    def update_object(self, obj):
+        url_parts = [self.api_endpoint, self.module.params[self.unique_identifier]]
+        if self.module.check_mode:
+            return obj
+        else:
+            return self.put(url_parts, data=obj)
+
+    def delete_object(self):
+        if self.module.check_mode:
+            return {}
+        else:
+            url_parts = [self.api_endpoint, self.module.params[self.unique_identifier]]
+            return self.delete(url_parts)
 
     def _request(self, method, url_parts, data=None, params=None):
         module_params = self.module.params
@@ -93,19 +221,25 @@ class _ConsulModule:
                 ca_path=ca_path,
             )
             response_data = response.read()
-        except urllib_error.URLError as e:
-            self.module.fail_json(
-                msg="Could not connect to consul agent at %s:%s, error was %s"
-                % (module_params["host"], module_params["port"], str(e))
-            )
-        else:
             status = (
                 response.status if hasattr(response, "status") else response.getcode()
             )
-            if 400 <= status < 600:
-                raise RequestError("%d %s" % (status, response_data))
 
-            return json.loads(response_data)
+        except urllib_error.URLError as e:
+            if isinstance(e, urllib_error.HTTPError):
+                status = e.code
+                response_data = e.fp.read()
+            else:
+                self.module.fail_json(
+                    msg="Could not connect to consul agent at %s:%s, error was %s"
+                    % (module_params["host"], module_params["port"], str(e))
+                )
+                raise
+
+        if 400 <= status < 600:
+            raise RequestError(status, response_data)
+
+        return json.loads(response_data)
 
     def get(self, url_parts, **kwargs):
         return self._request("GET", url_parts, **kwargs)

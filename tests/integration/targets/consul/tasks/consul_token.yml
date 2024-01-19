@@ -22,16 +22,20 @@
     token: "{{ consul_management_token }}"
     service_identities:
       - service_name: test
+        datacenters: [test1, test2]
+    node_identities:
+      - node_name: test
+        datacenter: test
     policies:
-      - foo-access
-      - foo-access2
+      - name: foo-access
+      - name: foo-access2
     expiration_ttl: 1h
-  register: result
+  register: create_result
 
 - assert:
     that:
-      - result is changed
-      - result.token.AccessorID == "07a7de84-c9c7-448a-99cc-beaf682efd21"
+      - create_result is changed
+      - create_result.token.AccessorID == "07a7de84-c9c7-448a-99cc-beaf682efd21"
 
 - name: update token
   community.general.consul_token:
@@ -40,7 +44,8 @@
     token: "{{ consul_management_token }}"
     description: Testing
     policies:
-      - foo-access
+      - id: "{{ create_result.token.Policies[-1].ID }}"
+    service_identities: []
   register: result
 
 - assert:
@@ -52,6 +57,8 @@
     state: present
     accessor_id: 07a7de84-c9c7-448a-99cc-beaf682efd21
     token: "{{ consul_management_token }}"
+    policies:
+      - id: "{{ create_result.token.Policies[-1].ID }}"
   register: result
 
 - assert:

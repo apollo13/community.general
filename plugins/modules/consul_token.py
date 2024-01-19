@@ -49,38 +49,108 @@ options:
       - Free form human readable description of the token.
     type: str
   policies:
-    description:
-      - The list of policy names that should be applied to the token.
     type: list
-    elements: str
+    elements: dict
+    description:
+      - List of policies to attach to the token. Each policy is a dict.
+      - If the parameter is left blank, any policies currently assigned will not be changed.
+      - Any empty array (V([])) will clear any policies previously set.
+    suboptions:
+      name:
+        description:
+          - The name of the policy to attach to this token; see M(community.general.consul_policy) for more info.
+          - Either this or O(policies[].id) must be specified.
+        type: str
+      id:
+        description:
+          - The ID of the policy to attach to this token; see M(community.general.consul_policy) for more info.
+          - Either this or O(policies[].name) must be specified.
+        type: str
   roles:
-    description:
-      - The list of role names that should be applied to the token.
     type: list
-    elements: str
+    elements: dict
+    description:
+      - List of roles to attach to the token. Each role is a dict.
+      - If the parameter is left blank, any roles currently assigned will not be changed.
+      - Any empty array (V([])) will clear any roles previously set.
+    suboptions:
+      name:
+        description:
+          - The name of the role to attach to this token; see M(community.general.consul_role) for more info.
+          - Either this or O(roles[].id) must be specified.
+        type: str
+      id:
+        description:
+          - The ID of the role to attach to this token; see M(community.general.consul_role) for more info.
+          - Either this or O(roles[].name) must be specified.
+        type: str
   templated_policies:
     description:
       - The list of templated policies that should be applied to the role.
     type: list
     elements: dict
+    suboptions:
+      template_name:
+        description:
+          - The templated policy name.
+        type: str
+        required: true
+      template_variables:
+        description:
+          - The templated policy variables.
+          - Not all templated policies require variables.
+        type: dict
   service_identities:
-    description:
-      - The list of service identities that should be applied to the token.
     type: list
     elements: dict
-  node_identities:
     description:
-      - The list of node identities that should be applied to the token.
+      - List of service identities to attach to the token.
+      - If not specified, any service identities currently assigned will not be changed.
+      - If the parameter is an empty array (V([])), any node identities assigned will be unassigned.
+    suboptions:
+      service_name:
+        description:
+          - The name of the service.
+          - Must not be longer than 256 characters, must start and end with a lowercase alphanumeric character.
+          - May only contain lowercase alphanumeric characters as well as - and _.
+        type: str
+        required: true
+      datacenters:
+        description:
+          - The datacenters the token will be effective.
+          - If an empty array (V([])) is specified, the token will valid in all datacenters.
+          - including those which do not yet exist but may in the future.
+        type: list
+        elements: str
+  node_identities:
     type: list
-    elements: dict    
+    elements: dict
+    description:
+      - List of node identities to attach to the token.
+      - If not specified, any node identities currently assigned will not be changed.
+      - If the parameter is an empty array (V([])), any node identities assigned will be unassigned.
+    suboptions:
+      node_name:
+        description:
+          - The name of the node.
+          - Must not be longer than 256 characters, must start and end with a lowercase alphanumeric character.
+          - May only contain lowercase alphanumeric characters as well as - and _.
+        type: str
+        required: true
+      datacenter:
+        description:
+          - The nodes datacenter.
+          - This will result in effective token only being valid in this datacenter.
+        type: str
+        required: true
   local:
     description:
-      - If true, indicates that the token should not be replicated globally 
+      - If true, indicates that the token should not be replicated globally
         and instead be local to the current datacenter.
     type: bool
   expiration_ttl:
     description:
-      - This is a convenience field and if set will initialize the O(expiration_time).
+      - This is a convenience field and if set will initialize the C(expiration_time).
         Can be specified in the form of "60s" or "5m" (i.e., 60 seconds or 5 minutes,
         respectively). Ingored when the token is updated!
     type: str
@@ -92,19 +162,22 @@ EXAMPLES = """
     state: present
     accessor_id: 07a7de84-c9c7-448a-99cc-beaf682efd21
     token: 8adddd91-0bd6-d41d-ae1a-3b49cfa9a0e8
-    roles: [role1, role2]
+    roles:
+      - name: role1
+      - name: role2
     service_identities:
       - service_name: service1
         datacenters: [dc1, dc2]
     node_identities:
       - node_name: node1
-        datacenters: [dc1, dc2]            
+        datacenter: dc1
+    expiration_ttl: 50m
 
 - name: Delete a token
   community.general.consul_token:
     state: absent
     accessor_id: 07a7de84-c9c7-448a-99cc-beaf682efd21
-    token: 8adddd91-0bd6-d41d-ae1a-3b49cfa9a0e8        
+    token: 8adddd91-0bd6-d41d-ae1a-3b49cfa9a0e8
 """
 
 RETURN = """
@@ -120,7 +193,7 @@ token:
         Hash: rj5PeDHddHslkpW7Ij4OD6N4bbSXiecXFmiw2SYXg2A=
         Local: false
         ModifyIndex: 633
-        SecretID: bd380fba-da17-7cee-8576-8d6427c6c930, 
+        SecretID: bd380fba-da17-7cee-8576-8d6427c6c930
         ServiceIdentities: [{"ServiceName": "test"}]
 """
 
@@ -133,6 +206,23 @@ from ansible_collections.community.general.plugins.module_utils.consul import (
 )
 
 
+def normalize_link_obj(api_obj, module_obj, key):
+    api_objs = api_obj.get(key)
+    module_objs = module_obj.get(key)
+    if api_objs is None or module_objs is None:
+        return
+    name_to_id = {i["Name"]: i["ID"] for i in api_objs}
+    id_to_name = {i["ID"]: i["Name"] for i in api_objs}
+
+    for obj in module_objs:
+        identifier = obj.get("ID")
+        name = obj.get("Name)")
+        if identifier and not name and identifier in id_to_name:
+            obj["Name"] = id_to_name[identifier]
+        if not identifier and name and name in name_to_id:
+            obj["ID"] = name_to_id[name]
+
+
 class ConsulTokenModule(_ConsulModule):
     api_endpoint = "acl/token"
     result_key = "token"
@@ -142,9 +232,14 @@ class ConsulTokenModule(_ConsulModule):
         def helper(item):
             return {camel_case_key(k): v for k, v in item.items()}
 
-        if k in {"policies", "roles"} and v:
-            v = [{"Name": i} for i in v]
-        if k in {"templated_policies", "node_identities", "service_identities"} and v:
+        cc_items = {
+            "policies",
+            "roles",
+            "templated_policies",
+            "node_identities",
+            "service_identities",
+        }
+        if k in cc_items and v:
             v = [helper(i) for i in v]
         if is_update and k == "expiration_ttl":
             return  # expiration_ttl not supported on update
@@ -162,11 +257,8 @@ class ConsulTokenModule(_ConsulModule):
         # SecretID is usually not supplied
         if "SecretID" not in module_obj and "SecretID" in api_obj:
             del api_obj["SecretID"]
-        # We solely compare roles and policies by name
-        if "Roles" in api_obj:
-            api_obj["Roles"] = [{"Name": i["Name"]} for i in api_obj["Roles"]]
-        if "Policies" in api_obj:
-            api_obj["Policies"] = [{"Name": i["Name"]} for i in api_obj["Policies"]]
+        normalize_link_obj(api_obj, module_obj, "Roles")
+        normalize_link_obj(api_obj, module_obj, "Policies")
         # ExpirationTTL is only supported on create, not for update
         # it writes to ExpirationTime, so we need to remove that as well
         if "ExpirationTTL" in module_obj:
@@ -174,15 +266,60 @@ class ConsulTokenModule(_ConsulModule):
         return super().needs_update(api_obj, module_obj)
 
 
+NAME_ID_SPEC = dict(
+    name=dict(type="str"),
+    id=dict(type="str"),
+)
+
+NODE_ID_SPEC = dict(
+    node_name=dict(type="str", required=True),
+    datacenter=dict(type="str", required=True),
+)
+
+SERVICE_ID_SPEC = dict(
+    service_name=dict(type="str", required=True),
+    datacenters=dict(type="list", elements="str"),
+)
+
+TEMPLATE_POLICY_SPEC = dict(
+    template_name=dict(type="str", required=True),
+    template_variables=dict(type="dict"),
+)
+
+
 _ARGUMENT_SPEC = {
     "description": dict(),
     "accessor_id": dict(),
     "secret_id": dict(no_log=True),
-    "roles": dict(type="list", elements="str"),
-    "policies": dict(type="list", elements="str"),
-    "templated_policies": dict(type="list", elements="dict"),
-    "node_identities": dict(type="list", elements="dict"),
-    "service_identities": dict(type="list", elements="dict"),
+    "roles": dict(
+        type="list",
+        elements="dict",
+        options=NAME_ID_SPEC,
+        mutually_exclusive=[("name", "id")],
+        required_one_of=[("name", "id")],
+    ),
+    "policies": dict(
+        type="list",
+        elements="dict",
+        options=NAME_ID_SPEC,
+        mutually_exclusive=[("name", "id")],
+        required_one_of=[("name", "id")],
+    ),
+    "templated_policies": dict(
+        type="list",
+        elements="dict",
+        options=TEMPLATE_POLICY_SPEC,
+    ),
+    "node_identities": dict(
+        type="list",
+        elements="dict",
+        options=NODE_ID_SPEC,
+    ),
+    "service_identities": dict(
+        type="list",
+        elements="dict",
+        options=SERVICE_ID_SPEC,
+    ),
     "local": dict(type="bool"),
     "expiration_ttl": dict(type="str"),
     "state": dict(default="present", choices=["present", "absent"]),

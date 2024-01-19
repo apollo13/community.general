@@ -123,10 +123,10 @@ class ConsulPolicyModule(_ConsulModule):
     result_key = "policy"
     unique_identifier = "id"
 
-    def endpoint_url(self, operation, obj=None):
+    def endpoint_url(self, operation, identifier=None):
         if operation == OPERATION_READ:
             return [self.api_endpoint, "name", self.module.params["name"]]
-        return super().endpoint_url(operation, obj)
+        return super().endpoint_url(operation, identifier)
 
 
 def main():

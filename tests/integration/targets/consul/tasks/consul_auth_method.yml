@@ -1,0 +1,71 @@
+---
+
+- name: create an auth method
+  community.general.consul_auth_method:
+    name: test
+    type: jwt
+    config:
+      jwt_validation_pubkeys:
+        - |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu1SU1LfVLPHCozMxH2Mo
+          4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u
+          +qKhbwKfBstIs+bMY2Zkp18gnTxKLxoS2tFczGkPLPgizskuemMghRniWaoLcyeh
+          kd3qqGElvW/VDL5AaWTg0nLVkjRo9z+40RQzuVaE8AkAFmxZzow3x+VJYKdjykkJ
+          0iT9wCS0DRTXu269V264Vf/3jvredZiKRkgwlL9xNAwxXFg0x/XFw005UWVRIkdg
+          cKWTjpBP2dPwVZ4WWC+9aGVd+Gyn1o0CLelf4rEjGoXbAAEgAqeGUxrcIlbjXfbc
+          mwIDAQAB
+          -----END PUBLIC KEY-----              
+    token: "{{ consul_management_token }}"
+  register: result
+
+- assert:
+    that:
+      - result is changed
+      - result.auth_method.Type == 'jwt'
+
+- name: update auth method
+  community.general.consul_auth_method:
+    name: test
+    max_token_ttl: 30m80s
+    token: "{{ consul_management_token }}"
+  register: result
+
+- assert:
+    that:
+      - result is changed
+      - result.auth_method.Type == 'jwt'
+
+- name: update auth method (noop)
+  community.general.consul_auth_method:
+    name: test
+    max_token_ttl: 30m80s
+    token: "{{ consul_management_token }}"
+  register: result
+
+- assert:
+    that:
+      - result is not changed
+      - result.auth_method.Type == 'jwt'
+
+- name: delete auth method
+  community.general.consul_auth_method:
+    name: test
+    state: absent
+    token: "{{ consul_management_token }}"
+  register: result
+
+- assert:
+    that:
+      - result is changed
+
+- name: delete auth method (noop)
+  community.general.consul_auth_method:
+    name: test
+    state: absent
+    token: "{{ consul_management_token }}"
+  register: result
+
+- assert:
+    that:
+      - result is not changed

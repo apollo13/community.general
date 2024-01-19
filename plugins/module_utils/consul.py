@@ -62,7 +62,7 @@ def auth_argument_spec():
 def camel_case_key(key):
     parts = []
     for part in key.split("_"):
-        if part in {"id", "ttl"}:
+        if part in {"id", "ttl", "jwks", "jwt", "oidc", "iam", "sts"}:
             parts.append(part.upper())
         else:
             parts.append(part.capitalize())
@@ -89,6 +89,8 @@ class _ConsulModule:
     api_endpoint = None  # type: str
     unique_identifier = None  # type: str
     result_key = None  # type: str
+    create_only_fields = set()
+    camel_case_fields = set()
 
     def __init__(self, module):
         self.module = module
@@ -145,7 +147,16 @@ class _ConsulModule:
         return obj
 
     def map_param(self, k, v, is_update):
+        def helper(item):
+            return {camel_case_key(k): v for k, v in item.items()}
+
         if k in self.param_obj_mapping and v is not None:
+            if isinstance(v, dict) and k in self.camel_case_fields:
+                v = helper(v)
+            elif isinstance(v, (list, tuple)) and k in self.camel_case_fields:
+                v = [helper(i) for i in v]
+            if is_update and k in self.create_only_fields:
+                return
             return self.param_obj_mapping[k], v
 
     def _needs_update(self, api_obj, module_obj):
@@ -177,6 +188,9 @@ class _ConsulModule:
         except RequestError as e:
             if e.status == 404:
                 return
+            elif e.status == 403 and b"ACL not found" in e.response_data:
+                return
+            raise
 
     def create_object(self, obj):
         if self.module.check_mode:

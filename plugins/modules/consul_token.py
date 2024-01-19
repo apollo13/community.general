@@ -199,10 +199,8 @@ token:
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.community.general.plugins.module_utils.consul import (
-    RequestError,
     _ConsulModule,
     auth_argument_spec,
-    camel_case_key,
 )
 
 
@@ -228,30 +226,14 @@ class ConsulTokenModule(_ConsulModule):
     result_key = "token"
     unique_identifier = "accessor_id"
 
-    def map_param(self, k, v, is_update):
-        def helper(item):
-            return {camel_case_key(k): v for k, v in item.items()}
-
-        cc_items = {
-            "policies",
-            "roles",
-            "templated_policies",
-            "node_identities",
-            "service_identities",
-        }
-        if k in cc_items and v:
-            v = [helper(i) for i in v]
-        if is_update and k == "expiration_ttl":
-            return  # expiration_ttl not supported on update
-
-        return super().map_param(k, v, is_update)
-
-    def read_object(self):
-        try:
-            return super().read_object()
-        except RequestError as e:
-            if e.status == 403 and b"token does not exist" in e.response_data:
-                return
+    create_only_fields = {"expiration_ttl"}
+    camel_case_fields = {
+        "policies",
+        "roles",
+        "templated_policies",
+        "node_identities",
+        "service_identities",
+    }
 
     def needs_update(self, api_obj, module_obj):
         # SecretID is usually not supplied

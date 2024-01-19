@@ -73,6 +73,11 @@ STATE_PARAMETER = "state"
 STATE_PRESENT = "present"
 STATE_ABSENT = "absent"
 
+OPERATION_READ = object()
+OPERATION_CREATE = object()
+OPERATION_UPDATE = object()
+OPERATION_DELETE = object()
+
 
 class _ConsulModule:
     """Base class for Consul modules.
@@ -81,9 +86,9 @@ class _ConsulModule:
     As such backwards incompatible changes can occur even in bugfix releases.
     """
 
-    api_endpoint = None
-    unique_identifier = None
-    result_key = None
+    api_endpoint = None  # type: str
+    unique_identifier = None  # type: str
+    result_key = None  # type: str
 
     def __init__(self, module):
         self.module = module
@@ -115,7 +120,7 @@ class _ConsulModule:
                     new_obj = obj
         elif module.params[STATE_PARAMETER] == STATE_ABSENT:
             if obj is not None:
-                self.delete_object()
+                self.delete_object(obj)
                 changed = True
                 diff = {"before": obj, "after": {}}
             else:
@@ -156,10 +161,19 @@ class _ConsulModule:
                 return True
         return False
 
+    def endpoint_url(self, operation, identifier=None):
+        if operation == OPERATION_CREATE:
+            return self.api_endpoint
+        else:
+            assert identifier is not None
+            return "/".join([self.api_endpoint, identifier])
+
     def read_object(self):
-        url_parts = [self.api_endpoint, self.module.params[self.unique_identifier]]
+        url = self.endpoint_url(
+            OPERATION_READ, self.module.params.get(self.unique_identifier)
+        )
         try:
-            return self.get(url_parts)
+            return self.get(url)
         except RequestError as e:
             if e.status == 404:
                 return
@@ -172,7 +186,9 @@ class _ConsulModule:
 
     def update_object(self, existing, obj):
         operational_attributes = {"CreateIndex", "CreateTime", "Hash", "ModifyIndex"}
-        url_parts = [self.api_endpoint, self.module.params[self.unique_identifier]]
+        url = self.endpoint_url(
+            OPERATION_UPDATE, existing.get(camel_case_key(self.unique_identifier))
+        )
         if self.module.check_mode:
             return obj
         else:
@@ -181,14 +197,16 @@ class _ConsulModule:
             }
             for k, v in obj.items():
                 existing[k] = v
-            return self.put(url_parts, data=existing)
+            return self.put(url, data=existing)
 
-    def delete_object(self):
+    def delete_object(self, obj):
         if self.module.check_mode:
             return {}
         else:
-            url_parts = [self.api_endpoint, self.module.params[self.unique_identifier]]
-            return self.delete(url_parts)
+            url = self.endpoint_url(
+                OPERATION_DELETE, obj.get(camel_case_key(self.unique_identifier))
+            )
+            return self.delete(url)
 
     def _request(self, method, url_parts, data=None, params=None):
         module_params = self.module.params

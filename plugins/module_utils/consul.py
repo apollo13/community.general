@@ -172,6 +172,15 @@ class _ConsulModule:
                 return True
         return False
 
+    def prepare_object(self, existing, obj):
+        operational_attributes = {"CreateIndex", "CreateTime", "Hash", "ModifyIndex"}
+        existing = {
+            k: v for k, v in existing.items() if k not in operational_attributes
+        }
+        for k, v in obj.items():
+            existing[k] = v
+        return existing
+
     def endpoint_url(self, operation, identifier=None):
         if operation == OPERATION_CREATE:
             return self.api_endpoint
@@ -196,22 +205,16 @@ class _ConsulModule:
         if self.module.check_mode:
             return obj
         else:
-            return self.put(self.api_endpoint, data=obj)
+            return self.put(self.api_endpoint, data=self.prepare_object({}, obj))
 
     def update_object(self, existing, obj):
-        operational_attributes = {"CreateIndex", "CreateTime", "Hash", "ModifyIndex"}
         url = self.endpoint_url(
             OPERATION_UPDATE, existing.get(camel_case_key(self.unique_identifier))
         )
         if self.module.check_mode:
             return obj
         else:
-            existing = {
-                k: v for k, v in existing.items() if k not in operational_attributes
-            }
-            for k, v in obj.items():
-                existing[k] = v
-            return self.put(url, data=existing)
+            return self.put(url, data=self.prepare_object(existing, obj))
 
     def delete_object(self, obj):
         if self.module.check_mode:

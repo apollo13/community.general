@@ -15,57 +15,57 @@
           0iT9wCS0DRTXu269V264Vf/3jvredZiKRkgwlL9xNAwxXFg0x/XFw005UWVRIkdg
           cKWTjpBP2dPwVZ4WWC+9aGVd+Gyn1o0CLelf4rEjGoXbAAEgAqeGUxrcIlbjXfbc
           mwIDAQAB
-          -----END PUBLIC KEY-----
+          -----END PUBLIC KEY-----      
     token: "{{ consul_management_token }}"
+
+- name: create a binding rule
+  community.general.consul_binding_rule:
+    name: test-binding
+    description: my description
+    auth_method: test
+    token: "{{ consul_management_token }}"
+    bind_type: service
+    bind_name: yolo
   register: result
 
 - assert:
     that:
       - result is changed
-      - result.auth_method.Type == 'jwt'
+      - result.binding_rule.AuthMethod == 'test'
+      - result.binding.Description == 'test-binding: my description'
 
-- name: update auth method
-  community.general.consul_auth_method:
-    name: test
-    max_token_ttl: 30m80s
+- name: update a binding rule
+  community.general.consul_binding_rule:
+    name: test-binding
+    auth_method: test
     token: "{{ consul_management_token }}"
+    bind_name: yolo2
   register: result
 
 - assert:
     that:
       - result is changed
-      - result.auth_method.Type == 'jwt'
+      - result.binding.Description == 'test-binding: my description'
 
-- name: update auth method (noop)
-  community.general.consul_auth_method:
-    name: test
-    max_token_ttl: 30m80s
+- name: update a binding rule (noop)
+  community.general.consul_binding_rule:
+    name: test-binding
+    auth_method: test
     token: "{{ consul_management_token }}"
   register: result
 
 - assert:
     that:
       - result is not changed
-      - result.auth_method.Type == 'jwt'
+      - result.binding.Description == 'test-binding: my description'
 
-- name: delete auth method
-  community.general.consul_auth_method:
-    name: test
+- name: delete a binding rule
+  community.general.consul_binding_rule:
+    name: test-binding
+    auth_method: test
     state: absent
     token: "{{ consul_management_token }}"
   register: result
-
 - assert:
     that:
       - result is changed
-
-- name: delete auth method (noop)
-  community.general.consul_auth_method:
-    name: test
-    state: absent
-    token: "{{ consul_management_token }}"
-  register: result
-
-- assert:
-    that:
-      - result is not changed

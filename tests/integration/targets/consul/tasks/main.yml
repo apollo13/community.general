@@ -96,6 +96,7 @@
     - import_tasks: consul_role.yml
     - import_tasks: consul_token.yml
     - import_tasks: consul_auth_method.yml
+    - import_tasks: consul_binding_rule.yml
     always:
     - name: Kill consul process
       shell: kill $(cat {{ remote_tmp_dir }}/consul.pid)

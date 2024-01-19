@@ -5,12 +5,15 @@
 
 - name: create a policy with rules
   community.general.consul_policy:
-    name: foo-access
+    name: "{{ item }}"
     rules: |
         key "foo" {
             policy = "read"
         }
     token: "{{ consul_management_token }}"
+  loop:
+    - foo-access
+    - foo-access2
 
 - name: create token
   community.general.consul_token:
@@ -21,6 +24,7 @@
       - service_name: test
     policies:
       - foo-access
+      - foo-access2
     expiration_ttl: 1h
   register: result
 
@@ -35,11 +39,8 @@
     accessor_id: 07a7de84-c9c7-448a-99cc-beaf682efd21
     token: "{{ consul_management_token }}"
     description: Testing
-    service_identities:
-      - service_name: test
     policies:
       - foo-access
-    expiration_ttl: 1h
   register: result
 
 - assert:
@@ -51,12 +52,6 @@
     state: present
     accessor_id: 07a7de84-c9c7-448a-99cc-beaf682efd21
     token: "{{ consul_management_token }}"
-    description: Testing
-    service_identities:
-      - service_name: test
-    policies:
-      - foo-access
-    expiration_ttl: 1h
   register: result
 
 - assert:

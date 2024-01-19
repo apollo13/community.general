@@ -108,7 +108,7 @@ class _ConsulModule:
                 changed = True
             else:
                 if self._needs_update(obj, obj_from_module):
-                    new_obj = self.update_object(obj_from_module)
+                    new_obj = self.update_object(obj, obj_from_module)
                     diff = {"before": obj, "after": new_obj}
                     changed = True
                 else:
@@ -146,15 +146,15 @@ class _ConsulModule:
     def _needs_update(self, api_obj, module_obj):
         api_obj = copy.deepcopy(api_obj)
         module_obj = copy.deepcopy(module_obj)
-
-        operational_attributes = {"CreateIndex", "CreateTime", "Hash", "ModifyIndex"}
-
-        api_obj = {k: v for k, v in api_obj.items() if k not in operational_attributes}
-
         return self.needs_update(api_obj, module_obj)
 
     def needs_update(self, api_obj, module_obj):
-        return api_obj != module_obj
+        for k, v in module_obj.items():
+            if k not in api_obj:
+                return True
+            if api_obj[k] != v:
+                return True
+        return False
 
     def read_object(self):
         url_parts = [self.api_endpoint, self.module.params[self.unique_identifier]]
@@ -170,12 +170,18 @@ class _ConsulModule:
         else:
             return self.put(self.api_endpoint, data=obj)
 
-    def update_object(self, obj):
+    def update_object(self, existing, obj):
+        operational_attributes = {"CreateIndex", "CreateTime", "Hash", "ModifyIndex"}
         url_parts = [self.api_endpoint, self.module.params[self.unique_identifier]]
         if self.module.check_mode:
             return obj
         else:
-            return self.put(url_parts, data=obj)
+            existing = {
+                k: v for k, v in existing.items() if k not in operational_attributes
+            }
+            for k, v in obj.items():
+                existing[k] = v
+            return self.put(url_parts, data=existing)
 
     def delete_object(self):
         if self.module.check_mode:

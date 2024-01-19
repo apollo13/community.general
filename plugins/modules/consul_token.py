@@ -48,7 +48,6 @@ options:
     description:
       - Free form human readable description of the token.
     type: str
-    default: ""
   policies:
     description:
       - The list of policy names that should be applied to the token.
@@ -79,7 +78,6 @@ options:
       - If true, indicates that the token should not be replicated globally 
         and instead be local to the current datacenter.
     type: bool
-    default: false
   expiration_ttl:
     description:
       - This is a convenience field and if set will initialize the O(expiration_time).
@@ -162,7 +160,7 @@ class ConsulTokenModule(_ConsulModule):
 
     def needs_update(self, api_obj, module_obj):
         # SecretID is usually not supplied
-        if "SecretID" not in module_obj:
+        if "SecretID" not in module_obj and "SecretID" in api_obj:
             del api_obj["SecretID"]
         # We solely compare roles and policies by name
         if "Roles" in api_obj:
@@ -173,13 +171,11 @@ class ConsulTokenModule(_ConsulModule):
         # it writes to ExpirationTime, so we need to remove that as well
         if "ExpirationTTL" in module_obj:
             del module_obj["ExpirationTTL"]
-        if "ExpirationTime" in api_obj:
-            del api_obj["ExpirationTime"]
-        return api_obj != module_obj
+        return super().needs_update(api_obj, module_obj)
 
 
 _ARGUMENT_SPEC = {
-    "description": dict(default=""),
+    "description": dict(),
     "accessor_id": dict(),
     "secret_id": dict(no_log=True),
     "roles": dict(type="list", elements="str"),
@@ -187,7 +183,7 @@ _ARGUMENT_SPEC = {
     "templated_policies": dict(type="list", elements="dict"),
     "node_identities": dict(type="list", elements="dict"),
     "service_identities": dict(type="list", elements="dict"),
-    "local": dict(type="bool", default=False),
+    "local": dict(type="bool"),
     "expiration_ttl": dict(type="str"),
     "state": dict(default="present", choices=["present", "absent"]),
 }

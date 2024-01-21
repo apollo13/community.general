@@ -26,6 +26,10 @@ attributes:
     support: none
   diff_mode:
     support: none
+deprecated:
+  removed_in: 0.0.0 # TODO
+  why: The legacy ACL system was removed from Consul.
+  alternative: Use M(community.general.consul_token) or M(community.general.consul_policy) instead.
 options:
   mgmt_token:
     description:

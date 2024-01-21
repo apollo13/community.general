@@ -73,10 +73,10 @@ STATE_PARAMETER = "state"
 STATE_PRESENT = "present"
 STATE_ABSENT = "absent"
 
-OPERATION_READ = object()
-OPERATION_CREATE = object()
-OPERATION_UPDATE = object()
-OPERATION_DELETE = object()
+OPERATION_READ = "read"
+OPERATION_CREATE = "create"
+OPERATION_UPDATE = "update"
+OPERATION_DELETE = "remove"
 
 
 class _ConsulModule:
@@ -110,10 +110,12 @@ class _ConsulModule:
         if module.params[STATE_PARAMETER] == STATE_PRESENT:
             obj_from_module = self.module_to_obj(obj is not None)
             if obj is None:
+                operation = OPERATION_CREATE
                 new_obj = self.create_object(obj_from_module)
                 diff = {"before": {}, "after": new_obj}
                 changed = True
             else:
+                operation = OPERATION_UPDATE
                 if self._needs_update(obj, obj_from_module):
                     new_obj = self.update_object(obj, obj_from_module)
                     diff = {"before": obj, "after": new_obj}
@@ -121,6 +123,7 @@ class _ConsulModule:
                 else:
                     new_obj = obj
         elif module.params[STATE_PARAMETER] == STATE_ABSENT:
+            operation = OPERATION_DELETE
             if obj is not None:
                 self.delete_object(obj)
                 changed = True
@@ -132,8 +135,10 @@ class _ConsulModule:
             raise RuntimeError("Unknown state supplied.")
 
         result = {"changed": changed}
-        if self.module._diff and changed:
-            result["diff"] = diff
+        if changed:
+            result["operation"] = operation
+            if self.module._diff:
+                result["diff"] = diff
         if self.result_key:
             result[self.result_key] = new_obj
         module.exit_json(**result)

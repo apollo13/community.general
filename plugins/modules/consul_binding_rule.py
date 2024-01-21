@@ -93,7 +93,7 @@ binding_rule:
   returned: always
   type: dict
   sample:
-    Description: my_name: example rule
+    Description: "my_name: example rule"
     AuthMethod: minikube
     Selector: serviceaccount.namespace==default
     BindType: service
@@ -101,6 +101,11 @@ binding_rule:
     CreateIndex: 30
     ID: 59c8a237-e481-4239-9202-45f117950c5f
     ModifyIndex: 33
+operation:
+  description: The operation performed.
+  returned: changed
+  type: str
+  sample: update
 """
 
 

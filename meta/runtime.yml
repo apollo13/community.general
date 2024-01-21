@@ -24,7 +24,7 @@ plugin_routing:
   modules:
     consul_acl:
       deprecation:
-        removal_version: 0.0.0 # TODO
+        removal_version: 99.0.0 # TODO
         warning_text: Use community.general.consul_token and community.general.consul_policy instead.
     rax_cbs_attachments:
       deprecation:

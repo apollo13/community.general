@@ -195,6 +195,11 @@ token:
         ModifyIndex: 633
         SecretID: bd380fba-da17-7cee-8576-8d6427c6c930
         ServiceIdentities: [{"ServiceName": "test"}]
+operation:
+    description: The operation performed.
+    returned: changed
+    type: str
+    sample: update
 """
 
 from ansible.module_utils.basic import AnsibleModule

@@ -44,7 +44,7 @@ options:
     description:
       - The type of auth method being configured.
       - This field is immutable.
-      - Required when the auth method is created.      
+      - Required when the auth method is created.
     type: str
     choices: ['kubernetes', 'jwt', 'oidc', 'aws-iam']
   description:
@@ -89,7 +89,7 @@ EXAMPLES = """
           0iT9wCS0DRTXu269V264Vf/3jvredZiKRkgwlL9xNAwxXFg0x/XFw005UWVRIkdg
           cKWTjpBP2dPwVZ4WWC+9aGVd+Gyn1o0CLelf4rEjGoXbAAEgAqeGUxrcIlbjXfbc
           mwIDAQAB
-          -----END PUBLIC KEY-----              
+          -----END PUBLIC KEY-----
     token: "{{ consul_management_token }}"
 
 - name: delete auth method
@@ -121,6 +121,11 @@ auth_method:
     ModifyIndex: 487
     Name: test
     Type: jwt
+operation:
+    description: The operation performed.
+    returned: changed
+    type: str
+    sample: update
 """
 
 import re

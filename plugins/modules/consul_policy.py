@@ -94,8 +94,24 @@ EXAMPLES = """
 """
 
 RETURN = """
+policy:
+    description: The policy as returned by the consul HTTP API
+    returned: always
+    type: dict
+    sample:
+        CreateIndex: 632
+        Description: Testing
+        Hash: rj5PeDHddHslkpW7Ij4OD6N4bbSXiecXFmiw2SYXg2A=
+        Name: foo-access
+        Rules: |-
+          key "foo" {
+              policy = "read"
+          }
+          key "private/foo" {
+              policy = "deny"
+          }
 operation:
-    description: The operation performed on the policy.
+    description: The operation performed.
     returned: changed
     type: str
     sample: update

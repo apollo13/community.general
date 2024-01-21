@@ -36,6 +36,7 @@
     that:
       - create_result is changed
       - create_result.token.AccessorID == "07a7de84-c9c7-448a-99cc-beaf682efd21"
+      - create_result.operation == 'create'
 
 - name: update token
   community.general.consul_token:
@@ -51,6 +52,7 @@
 - assert:
     that:
       - result is changed
+      - result.operation == 'update'
 
 - name: update token (noop)
   community.general.consul_token:
@@ -64,6 +66,7 @@
 - assert:
     that:
       - result is not changed
+      - result.operation is not defined
 
 - name: remove token
   community.general.consul_token:
@@ -76,3 +79,4 @@
     that:
       - result is changed
       - not result.token
+      - result.operation == 'remove'

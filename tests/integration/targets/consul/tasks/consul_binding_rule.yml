@@ -33,6 +33,7 @@
       - result is changed
       - result.binding_rule.AuthMethod == 'test'
       - result.binding.Description == 'test-binding: my description'
+      - result.operation == 'create'
 
 - name: update a binding rule
   community.general.consul_binding_rule:
@@ -46,6 +47,7 @@
     that:
       - result is changed
       - result.binding.Description == 'test-binding: my description'
+      - result.operation == 'update'
 
 - name: update a binding rule (noop)
   community.general.consul_binding_rule:
@@ -58,6 +60,7 @@
     that:
       - result is not changed
       - result.binding.Description == 'test-binding: my description'
+      - result.operation is not defined
 
 - name: delete a binding rule
   community.general.consul_binding_rule:
@@ -69,3 +72,4 @@
 - assert:
     that:
       - result is changed
+      - result.operation == 'remove'

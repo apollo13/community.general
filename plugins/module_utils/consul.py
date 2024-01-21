@@ -216,10 +216,11 @@ class _ConsulModule:
         url = self.endpoint_url(
             OPERATION_UPDATE, existing.get(camel_case_key(self.unique_identifier))
         )
+        merged_object = self.prepare_object(existing, obj)
         if self.module.check_mode:
-            return obj
+            return merged_object
         else:
-            return self.put(url, data=self.prepare_object(existing, obj))
+            return self.put(url, data=merged_object)
 
     def delete_object(self, obj):
         if self.module.check_mode:
